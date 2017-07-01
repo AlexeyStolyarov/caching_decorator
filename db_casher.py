@@ -2,24 +2,23 @@
 #############################################################################
 #  Caching decorator for caching results returned by functions:
 #  
-#  Using:
+#  Usage:
 #   
 #  @cashe_to_db(timedelta)
-#  def Кэшируемая функция:
+#  def function_that_you_want_to_cashe:
 #		pass
 #  
 #---------------------------------------------------------------------------#
 #  CopyRight by Alexey A Stolyarov aka mazilla. 
 #############################################################################
 
+import base64
+import os
+import os.path
 import pickle
 import sqlite3
-import base64
-import os.path
-import os
 import time
 from datetime import timedelta, datetime
-
 
 DB_NAME 		= './cached_data.sqlite3'
 DB_TABLE 		= 'cashed_data'
@@ -34,6 +33,10 @@ DB_DATA_TTL_1H	= timedelta(days=0, hours=1, minutes=0, seconds=0)
 DB_DATA_TTL_1D	= timedelta(days=1, hours=0, minutes=0, seconds=0)
 DB_DATA_TTL_7D	= timedelta(days=7, hours=0, minutes=0, seconds=0)
 
+
+#
+# creating database used by our decorator
+#
 def create_DB(name, reset=None):
 	if reset and os.path.isfile(name):
 		os.remove(name)
@@ -47,6 +50,10 @@ def create_DB(name, reset=None):
 	
 create_DB(DB_NAME)
 
+
+#
+#  Decorator definition
+#
 def cashe_to_db(data_ttl=DB_DATA_TTL_1H, debug=None):
 	def decorator(func):
 		def wrapper(*args, **kwargs):
@@ -122,6 +129,9 @@ def cashe_to_db(data_ttl=DB_DATA_TTL_1H, debug=None):
 	
 #=============================================================================
 
+#
+#  if we run this file directly then we start unittests for it.
+#
 if __name__ == '__main__':
 	import unittest
 			
@@ -129,19 +139,17 @@ if __name__ == '__main__':
 		def setUp(self):
 			pass
 
-		#Проверка максимального числа записей
+            # checking max intems
 		def test_maxitems(self):
-			# Чистим базу данных
+            # clearing database
 			create_DB(DB_NAME,reset=True)
 			
 			class test_class:
 				@cashe_to_db(timedelta(days=0, hours=0, minutes=20, seconds=0), debug=True)
 				def test_f1(self, x, y, name):
 					return "%s: %s: %s" % (x, y, name)
-			# Загоняем в кэш тестовое значение c большим ТТЛ
-			# Затем переполняем счётчик DB_MAX_ITEMS
-			# Cмотрим - кэш должен чистится.
-		
+
+                    # testing eviction
 			crop0 =  test_class().test_f1('f1_arg0', 'f1_arg0','f1_arg0')[2]
 			assert crop0 == None
 			
@@ -154,7 +162,7 @@ if __name__ == '__main__':
 			crop_flag = test_class().test_f1('f1_arg0', 'f1_arg0','f1_arg2340')[2]
 			assert crop_flag == "ITEMS IS CROPPED"
 
-		#Проверка времени жизни кэша
+            # testing items time to live
 		def test_cashing(self):
 			TEST_TIME=5
 			
@@ -170,23 +178,23 @@ if __name__ == '__main__':
 			
 			cashed1 =  test_class().test_f1('f1_arg1', 'f1_arg2','f1_arg3')[1]
 			cashed2 =  test_class().test_f2('f2_arg1', 'f2_arg2','f2_arg3')[1]
-			
-			# Первый вызов. Ничего не кэшировано.
+
+            # 1st call. nothing is cached
 			assert cashed1 == "NON CASHED"
 			assert cashed2 == "NON CASHED"
 
 			cashed1 =  test_class().test_f1('f1_arg1', 'f1_arg2','f1_arg3')[1]
 			cashed2 =  test_class().test_f2('f2_arg1', 'f2_arg2','f2_arg3')[1]
-			
-			# Повторный вызов - должно быть кэшировано.
+
+            # 2st call. it should be cashed now
 			assert cashed1 == "CASHED"
 			assert cashed2 == "CASHED"
 			
 			time.sleep(TEST_TIME+1)
 			cashed1 =  test_class().test_f1('f1_arg1', 'f1_arg2','f1_arg3')[1]
 			cashed2 =  test_class().test_f2('f2_arg1', 'f2_arg2','f2_arg3')[1]
-			
-			# Спустя TEST_TIME+1, результат первой функции должен быть не в кэше. 
+
+            # after TEST_TIME+1, 1st assert should be non cached
 			assert cashed1 == "NON CASHED"
 			assert cashed2 == "CASHED"
 			
